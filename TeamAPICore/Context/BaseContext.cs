@@ -16,7 +16,7 @@ namespace TeamAPICore.Context
             _option = option;
             ConnectionString = _option.Value.ConnectionString;
         }
-        protected double getDouble(string input)
+        protected double GetDouble(string input)
         {
             if (!double.TryParse(input, out double output))
             {
@@ -24,5 +24,15 @@ namespace TeamAPICore.Context
             }
             return output;
         }
+
+        protected DateTime? GetDate(string input)
+        {
+            if(!DateTime.TryParse(input, out DateTime output))
+            {
+                return null;
+            }
+            return output;
+        }
     }
+
 }

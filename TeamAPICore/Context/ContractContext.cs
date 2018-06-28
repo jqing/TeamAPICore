@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using TeamAPICore.Models;
@@ -17,228 +18,337 @@ namespace TeamAPICore.Context
         {
         }
 
-        public async Task<List<Contract>> GetContractsAsync(string CRMId)
+        public Contract GetContractFromData(DataSet dataset)
         {
-            string sql = "sp_GetContractInfoByCRMID";
-            List<Contract> contracts = new List<Contract>();
-            DataSet dataset = new DataSet();
+            DataTable ContractInfo = null;
+            DataTable OccupancyFee = null;
+            DataTable Purchasers = null;
+            DataTable Deposits = null;
+            DataTable Products = null;
+            DataTable Documents = null;
+            DataTable Correspondences = null;
+            DataTable Communications = null;
+            DataTable Deficiency = null;
+            DataTable RoadMap = null;
 
+            if (dataset.Tables.Count >= 1)
+                ContractInfo = dataset.Tables[0];
+            if (dataset.Tables.Count >= 2)
+                OccupancyFee = dataset.Tables[1];
+            if (dataset.Tables.Count >= 3)
+                Purchasers = dataset.Tables[2];
+            if (dataset.Tables.Count >= 4)
+                Deposits = dataset.Tables[3];
+            if (dataset.Tables.Count >= 5)
+                Products = dataset.Tables[4];
+            if (dataset.Tables.Count >= 6)
+                Documents = dataset.Tables[5];
+            if (dataset.Tables.Count >= 7)
+                Correspondences = dataset.Tables[6];
+            if (dataset.Tables.Count >= 8)
+                Communications = dataset.Tables[7];
+            if (dataset.Tables.Count >= 9)
+                Deficiency = dataset.Tables[8];
+            if (dataset.Tables.Count >= 10)
+                RoadMap = dataset.Tables[9];
 
-            using (SqlConnection con = new SqlConnection(ConnectionString))
+            Contract contract = null;
+            if (ContractInfo != null && ContractInfo.Rows.Count == 1)
             {
-                con.Open();
-                using (SqlCommand cmd = new SqlCommand(sql, con))
+                var ContractRow = ContractInfo.Rows[0];
+                var contractid = Convert.ToString(ContractRow["ContractId"]);
+                if (int.TryParse(contractid, out int id))
                 {
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.Parameters.AddWithValue("@CRMID", CRMId);
-                    using (SqlDataAdapter da = new SqlDataAdapter(cmd))
+                    contract = new Contract
                     {
-                        // Fill the DataSet using default values for DataTable names, etc
-                        da.Fill(dataset);
-                    }
-                }
-
-                DataTable table = dataset.Tables[0];
-                DataTable Purchasers = dataset.Tables[1];
-                DataTable Deposits = dataset.Tables[2];
-                DataTable Products = dataset.Tables[3];
-                foreach (DataRow row in table.Rows)
-                    contracts.Add(await GetContractFromDataAsync(row, Purchasers, Deposits, Products, con));
-
-            }
-            return contracts;
-        }
-
-        public async Task<Contract> GetContractFromDataAsync(DataRow ContractRow,DataTable Purchasers,DataTable Deposits,DataTable Products,SqlConnection con)
-        {
-            var contractid = Convert.ToString(ContractRow["ContractId"]);
-            if (int.TryParse(contractid, out int id))
-            {
-                Contract contract = new Contract
-                {
-                    Id = id,
-                    FinalClosedDate = Convert.ToDateTime(ContractRow["Final_Closed_Date"]),
-                    PossessionDate = Convert.ToDateTime(ContractRow["PossessionDate"]),
-                    ConstructionStartDate = Convert.ToDateTime(ContractRow["ConstructionStart"]),
-                    RegistrationDate = Convert.ToDateTime(ContractRow["RegistrationDate"]),
-                    Project = Convert.ToString(ContractRow["ProjectName"]),
-                    ProjectId = Convert.ToString(ContractRow["ProjectID"]),
-                    Suite = Convert.ToString(ContractRow["Suite"]),
-                    Design = Convert.ToString(ContractRow["Design"]),
-                    LegalLevel = Convert.ToString(ContractRow["LegalLevel"]),
-                    LegalUnit = Convert.ToString(ContractRow["LegalUnit"]),
-                    MunicipalLevel = Convert.ToString(ContractRow["MunicipalLevel"]),
-                    MunicipalUnit = Convert.ToString(ContractRow["MunicipalUnit"]),
-                    OfferPrice = getDouble(Convert.ToString(ContractRow["OfferPrice"])),
-                    APS = "",
-                    FloorPlan = "",
-                    Locker = new List<string>(),
-                    ParkingSpace = new List<string>(),
-                    BicycleLocker = new List<string>(),
-                    Storage = new List<string>(),
-                    Status = "",
-                    GSTRebate = Convert.ToInt32(ContractRow["GSTRebate"]) == 1,
-                    Solicitor = new Solicitor
-                    {
-                        Name = Convert.ToString(ContractRow["SolicitorName"]),
-                        Address = new Address
+                        Id = id,
+                        Personid = Convert.ToInt32(ContractRow["PersonId"]),
+                        FinalClosedDate = GetDate(Convert.ToString(ContractRow["Final_Closed_Date"])),
+                        PossessionDate = GetDate(Convert.ToString(ContractRow["PossessionDate"])),
+                        ConstructionStartDate = GetDate(Convert.ToString(ContractRow["ConstructionStart"])),
+                        RegistrationDate = GetDate(Convert.ToString(ContractRow["RegistrationDate"])),
+                        Project = Convert.ToString(ContractRow["ProjectName"]),
+                        ProjectId = Convert.ToString(ContractRow["ProjectID"]),
+                        Suite = Convert.ToString(ContractRow["Suite"]),
+                        Design = Convert.ToString(ContractRow["Design"]),
+                        LegalLevel = Convert.ToString(ContractRow["LegalLevel"]),
+                        LegalUnit = Convert.ToString(ContractRow["LegalUnit"]),
+                        MunicipalLevel = Convert.ToString(ContractRow["MunicipalLevel"]),
+                        MunicipalUnit = Convert.ToString(ContractRow["MunicipalUnit"]),
+                        OfferPrice = GetDouble(Convert.ToString(ContractRow["OfferPrice"])),
+                        APS = new List<PersistedDocument>(),
+                        FloorPlan = "",
+                        Locker = new List<string>(),
+                        ParkingSpace = new List<string>(),
+                        BicycleLocker = new List<string>(),
+                        Storage = new List<string>(),
+                        Status = "",
+                        GSTRebate = Convert.ToInt32(ContractRow["GSTRebate"]) == 1,
+                        Solicitor = new Solicitor
                         {
-                            Suite = Convert.ToString(ContractRow["SolicitorSuite"]),
-                            StreetAddress = Convert.ToString(ContractRow["SolicitorAddress"]),
-                            City = Convert.ToString(ContractRow["SolicitorCity"]),
-                            Province = Convert.ToString(ContractRow["SolicitorProvince"]),
-                            PostalCode = Convert.ToString(ContractRow["SolicitorPostal"]),
-                            Country = Convert.ToString(ContractRow["SolicitorCountry"])
+                            Name = Convert.ToString(ContractRow["SolicitorName"]),
+                            Address = new Address
+                            {
+                                Suite = Convert.ToString(ContractRow["SolicitorSuite"]),
+                                StreetAddress = Convert.ToString(ContractRow["SolicitorAddress"]),
+                                City = Convert.ToString(ContractRow["SolicitorCity"]),
+                                Province = Convert.ToString(ContractRow["SolicitorProvince"]),
+                                PostalCode = Convert.ToString(ContractRow["SolicitorPostal"]),
+                                Country = Convert.ToString(ContractRow["SolicitorCountry"])
+                            },
+                            Fax = Convert.ToString(ContractRow["SolicitorFax"]),
+                            Firm = Convert.ToString(ContractRow["SolicitorCompany"]),
+                            Phone = Convert.ToString(ContractRow["SolicitorBusiness"])
                         },
-                        Fax = Convert.ToString(ContractRow["SolicitorFax"]),
-                        Firm = Convert.ToString(ContractRow["SolicitorCompany"]),
-                        Phone = Convert.ToString(ContractRow["SolicitorBusiness"])
-                    },
-                    Purchasers = new List<Purchaser>(),
-                    Deposits = new List<Deposit>()
-                };
+                        Purchasers = new List<Purchaser>(),
+                        Deposits = new List<Deposit>(),
+                        Documents = new List<PersistedDocument>(),
+                        Communications = new List<DigitalCommunication>(),
+                        Correspondences = new List<PersistedDocument>(),
+                        Deficiencies = new List<Deficiency>()
+                    };
 
-                //OccupancyFee
-                var sql = "sp_GetOccupancyFee";
-                using (SqlCommand cmd = new SqlCommand(sql, con))
-                {
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.Parameters.AddWithValue("@ContractID", contract.Id);
-                    var reader = await cmd.ExecuteReaderAsync();
-                    if (await reader.ReadAsync())
+                    //OccupancyFee
+                    if (OccupancyFee != null && OccupancyFee.Rows.Count == 1)
                     {
+                        var occupancyRow = OccupancyFee.Rows[0];
                         contract.OccupancyFees = new OccupancyFee
                         {
-                            NewAct = Convert.ToInt32(reader["NewAct"]) == 1,
-                            SalePrice = getDouble(Convert.ToString(reader["SalePrice"])),
-                            Deposits = getDouble(Convert.ToString(reader["Deposits"])),
-                            MoneyDue = getDouble(Convert.ToString(reader["BalanceDueEscrow"])),
-                            MortgageAmount = getDouble(Convert.ToString(reader["UnadjustedBalanceDue"])),
+                            NewAct = Convert.ToInt32(occupancyRow["NewAct"]) == 1,
+                            SalePrice = GetDouble(Convert.ToString(occupancyRow["SalePrice"])),
+                            Deposits = GetDouble(Convert.ToString(occupancyRow["Deposits"])),
+                            MoneyDue = GetDouble(Convert.ToString(occupancyRow["BalanceDueEscrow"])),
+                            MortgageAmount = GetDouble(Convert.ToString(occupancyRow["UnadjustedBalanceDue"])),
                             MonthlyOccupancyFees = new MonthlyOccupancyFee
                             {
                                 CommonExpenses = new CommonExpense
                                 {
-                                    Dewlling = getDouble(Convert.ToString(reader["DwellingCommonExpenses"])),
-                                    Parking = getDouble(Convert.ToString(reader["ParkingCommonExpenses"])),
-                                    Locker = getDouble(Convert.ToString(reader["LockerCommonExpenses"])),
-                                    BulkInternet = getDouble(Convert.ToString(reader["BulkInternetAmount"])),
+                                    Dewlling = GetDouble(Convert.ToString(occupancyRow["DwellingCommonExpenses"])),
+                                    Parking = GetDouble(Convert.ToString(occupancyRow["ParkingCommonExpenses"])),
+                                    Locker = GetDouble(Convert.ToString(occupancyRow["LockerCommonExpenses"])),
+                                    BulkInternet = GetDouble(Convert.ToString(occupancyRow["BulkInternetAmount"])),
 
                                 },
-                                CrossPhaseExpenses = getDouble(Convert.ToString(reader["CrossPhaseExpenses"])),
-                                OtherProductExpenses = getDouble(Convert.ToString(reader["OtherProductExpenses"])),
+                                CrossPhaseExpenses = GetDouble(Convert.ToString(occupancyRow["CrossPhaseExpenses"])),
+                                OtherProductExpenses = GetDouble(Convert.ToString(occupancyRow["OtherProductExpenses"])),
                                 RealtyTax = new InterestAmount
                                 {
-                                    Amount = getDouble(Convert.ToString(reader["MonthlyRealtyTaxes"])),
-                                    InterestRate = getDouble(Convert.ToString(reader["RealtyTaxRate"]))
+                                    Amount = GetDouble(Convert.ToString(occupancyRow["MonthlyRealtyTaxes"])),
+                                    InterestRate = GetDouble(Convert.ToString(occupancyRow["RealtyTaxRate"]))
                                 },
                                 FinancialComponent = new InterestAmount
                                 {
-                                    Amount = getDouble(Convert.ToString(reader["MonthlyInterimWebInterest"])),
-                                    InterestRate = getDouble(Convert.ToString(reader["WebInterimOccupancyInterestRate"]))
+                                    Amount = GetDouble(Convert.ToString(occupancyRow["MonthlyInterimWebInterest"])),
+                                    InterestRate = GetDouble(Convert.ToString(occupancyRow["WebInterimOccupancyInterestRate"]))
                                 }
 
                             }
                         };
+
                     }
-                }
 
-                //Purchasers
-                foreach (DataRow row in FilterDataTable(contractid, Purchasers))
-                {
-
-                    var addressForService = Convert.ToInt32(row["AddressForService"]);
-
-                    Address address = new Address
+                    //Purchasers
+                    if (Purchasers != null)
                     {
-                        Suite = Convert.ToString(row["Suite"]),
-                        StreetAddress = Convert.ToString(row["Address"]),
-                        City = Convert.ToString(row["City"]),
-                        Province = Convert.ToString(row["Province"]),
-                        PostalCode = Convert.ToString(row["PostalCode"]),
-                        Country = Convert.ToString(row["Country"])
-                    };
-                    Purchaser purchaser = new Purchaser
-                    {
-                        Address = address,
-                        Email = Convert.ToString(row["EmailAddress"]),
-                        Name = Convert.ToString(row["Name"]),
-                        Phone = Convert.ToString(row["HomePhone"])
-                    };
-                    contract.Purchasers.Add(purchaser);
-                    if (addressForService == 1)
-                    {
-                        contract.ServiceAddress = new ServiceAddress
+                        foreach (DataRow row in Purchasers.Rows)
                         {
-                            Address = address,
-                            Phone = purchaser.Phone,
-                            Email = purchaser.Email
 
+                            var addressForService = Convert.ToInt32(row["AddressForService"]);
+
+                            Address address = new Address
+                            {
+                                Suite = Convert.ToString(row["Suite"]),
+                                StreetAddress = Convert.ToString(row["Address"]),
+                                City = Convert.ToString(row["City"]),
+                                Province = Convert.ToString(row["Province"]),
+                                PostalCode = Convert.ToString(row["PostalCode"]),
+                                Country = Convert.ToString(row["Country"])
+                            };
+                            Purchaser purchaser = new Purchaser
+                            {
+                                Address = address,
+                                Email = Convert.ToString(row["EmailAddress"]),
+                                Name = Convert.ToString(row["Name"]),
+                                Phone = Convert.ToString(row["HomePhone"])
+                            };
+                            contract.Purchasers.Add(purchaser);
+                            if (addressForService == 1)
+                            {
+                                contract.ServiceAddress = new ServiceAddress
+                                {
+                                    Address = address,
+                                    Phone = purchaser.Phone,
+                                    Email = purchaser.Email
+
+                                };
+
+                            }
+
+                        }
+                    }
+
+                    //Deposits
+                    if (Deposits != null)
+                    {
+                        foreach (DataRow row in Deposits.Rows)
+                        {
+
+                            Deposit deposit = new Deposit
+                            {
+                                CheckNumber = Convert.ToString(row["ChequeNumber"]),
+                                Amount = GetDouble(Convert.ToString(row["Amount"])),
+                                Status = Convert.ToString(row["ChequeStatus"]),
+                                DueDate = Convert.ToString(row["DateDue"]),
+                                ReceivedDate = Convert.ToDateTime(row["Received"]),
+                                Type = Convert.ToString(row["DepositType"])
+                            };
+                            contract.Deposits.Add(deposit);
+                        }
+                    }
+
+                    //Products
+                    if (Products != null)
+                    {
+                        foreach (DataRow row in Products.Rows)
+                        {
+
+                            string p = Convert.ToString(row["ProductName"]);
+                            string name = Convert.ToString(row["Suite"]);
+                            if (name.ToUpper() == "TBA")
+                                name = "to be assigned";
+                            switch (p.ToUpper())
+                            {
+                                case "PARKING":
+                                    contract.ParkingSpace.Add(name);
+                                    break;
+                                case "LOCKER":
+                                    contract.Locker.Add(name);
+                                    break;
+                                case "BICYCLE":
+                                    contract.BicycleLocker.Add(name);
+                                    break;
+                                case "STORAGE":
+                                    contract.Storage.Add(name);
+                                    break;
+                                default:
+                                    break;
+                            }
+
+                        }
+                    }
+
+                    //Documents
+                    if (Documents != null)
+                    {
+                        foreach (DataRow row in Documents.Rows)
+                        {
+                            var d = new PersistedDocument
+                            {
+                                Id = Convert.ToInt32(row["PersistedDocumentId"]),
+                                Description = Convert.ToString(row["PresentationName"]),
+                                FileName = Path.GetFileNameWithoutExtension(Convert.ToString(row["TemplateName"])),
+                                Extension = Convert.ToString(row["FileExtension"]),
+                                Date = Convert.ToDateTime(row["ActivityDate"]),
+                                Hash = Convert.ToString(row["FileHash"])
+                            };
+                            var isAPS = Convert.ToBoolean(row["isAPS"]);
+                            var isTarion = Convert.ToBoolean(row["isTarion"]);
+                            if (isAPS)
+                                contract.APS.Add(d);
+                            contract.Documents.Add(d);
+                        }
+                    }
+
+                    //Correspondences
+                    if (Correspondences != null)
+                    {
+                        foreach (DataRow row in Correspondences.Rows)
+                        {
+                            var d = new PersistedDocument
+                            {
+                                Id = Convert.ToInt32(row["PersistedDocumentId"]),
+                                Description = Convert.ToString(row["CommentText"]),
+                                FileName = Path.GetFileNameWithoutExtension(Convert.ToString(row["FileName"])),
+                                Extension = Convert.ToString(row["FileExtension"]),
+                                Date = Convert.ToDateTime(row["Timestamp"]),
+                                Hash = Convert.ToString(row["FileHash"])
+                            };
+                            contract.Correspondences.Add(d);
+                        }
+                    }
+
+                    //Communications
+                    if (Communications != null)
+                    {
+                        foreach (DataRow row in Communications.Rows)
+                        {
+                            var d = new DigitalCommunication
+                            {
+                                Id = Convert.ToInt32(row["id"]),
+                                Subject = Convert.ToString(row["Subject"]),
+                                EmailAddress = Convert.ToString(row["EmailAddress"]),
+                                Date = Convert.ToDateTime(row["DateSent"])
+                            };
+                            contract.Communications.Add(d);
+                        }
+                    }
+
+                    //Deficiencies
+                    if (Deficiency != null)
+                    {
+                        foreach (DataRow row in Deficiency.Rows)
+                        {
+                            var d = new Deficiency
+                            {
+                                Id = Convert.ToInt32(row["id"]),
+                                Description = Convert.ToString(row["Description"]),
+                                Status = Convert.ToString(row["Status"]),
+                                Date = Convert.ToDateTime(row["Inspection"]),
+                                PermissionToEnter = Convert.ToBoolean(row["PermissionToEnter"])
+                            };
+                            contract.Deficiencies.Add(d);
+                        }
+                    }
+                    //RoadMap
+                    if(RoadMap != null && RoadMap.Rows.Count == 1)
+                    {
+                        DataRow row = RoadMap.Rows[0];
+                        contract.RoadMap = new RoadMap
+                        {
+                            ColourAppointmentDate = GetDate(Convert.ToString(row["ColourAppointment"])),
+                            ConstructionStartDate = GetDate(Convert.ToString(row["ConstructionStartDate"])),
+                            ElectricalAppointmentDate = GetDate(Convert.ToString(row["ElectricalAppointment"])),
+                            FinalClosedDate = GetDate(Convert.ToString(row["FinalClosedDate"])),
+                            LawyerID = Convert.ToInt32(row["LawyerID"]),
+                            MortgageApproved = Convert.ToBoolean(row["MortgageApproved"]),
+                            MoveInDate = GetDate(Convert.ToString(row["MoveInDate"])),
+                            OfferAcceptedDate = GetDate(Convert.ToString(row["OfferAcceptedDate"])),
+                            OneYearWarrantyDate = GetDate(Convert.ToString(row["OneYearWarranty"])),
+                            OriginalTentativePossessionDate = GetDate(Convert.ToString(row["OriginalTentativePossession"])),
+                            RegistrationDate = GetDate(Convert.ToString(row["RegistrationDate"])),
+                            RevisedPossessionDate = GetDate(Convert.ToString(row["RevisedPossessionDate"])),
+                            TenYearWarrantyDate = GetDate(Convert.ToString(row["TenYearWarranty"])),
+                            TwoYearWarrantyDate = GetDate(Convert.ToString(row["TwoYearWarranty"])),
+                            UpgradeAppointmentDate = GetDate(Convert.ToString(row["UpgradeAppointment"]))
                         };
-
                     }
 
                 }
 
-                //Deposits
-                foreach (DataRow row in FilterDataTable(contractid, Deposits))
-                {
-
-                    Deposit deposit = new Deposit
-                    {
-                        CheckNumber = Convert.ToString(row["ChequeNumber"]),
-                        Amount = getDouble(Convert.ToString(row["Amount"])),
-                        Status = Convert.ToString(row["ChequeStatus"]),
-                        DueDate = Convert.ToString(row["DateDue"]),
-                        ReceivedDate = Convert.ToDateTime(row["Received"]),
-                        Type = Convert.ToString(row["DepositType"])
-                    };
-                    contract.Deposits.Add(deposit);
-                }
-
-                //Products
-                foreach (DataRow row in FilterDataTable(contractid, Products))
-                {
-
-                    string p = Convert.ToString(row["ProductName"]);
-                    string name = Convert.ToString(row["Suite"]);
-                    if (name.ToUpper() == "TBA")
-                        name = "to be assigned";
-                    switch (p.ToUpper())
-                    {
-                        case "PARKING":
-                            contract.ParkingSpace.Add(name);
-                            break;
-                        case "LOCKER":
-                            contract.Locker.Add(name);
-                            break;
-                        case "BICYCLE":
-                            contract.BicycleLocker.Add(name);
-                            break;
-                        case "STORAGE":
-                            contract.Storage.Add(name);
-                            break;
-                        default:
-                            break;
-                    }
-
-                }
-
-                return contract;
             }
-            else
-            {
-                return new Contract();
-            }
+            return contract;
+
         }
+
 
         private DataRow[] FilterDataTable(string contractid,DataTable table)
         {
             return table.Select("ContractId = " + contractid);
         }
 
-        public async Task<Contract> GetContractAsync(int contractId,string CRMId)
+        public Contract GetContract(int contractId, string CRMId)
         {
-            string sql = "sp_GetContractInfoByContractID";
+            string sql = "sp_GetContractInfoByID";
             List<Contract> contracts = new List<Contract>();
             DataSet dataset = new DataSet();
 
@@ -249,24 +359,16 @@ namespace TeamAPICore.Context
                 using (SqlCommand cmd = new SqlCommand(sql, con))
                 {
                     cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.Parameters.AddWithValue("@ContractID", contractId);
                     cmd.Parameters.AddWithValue("@CRMID", CRMId);
+                    cmd.Parameters.AddWithValue("@ContractID", contractId);
                     using (SqlDataAdapter da = new SqlDataAdapter(cmd))
                     {
                         // Fill the DataSet using default values for DataTable names, etc
                         da.Fill(dataset);
                     }
                 }
-
-                DataTable table = dataset.Tables[0];
-                DataTable Purchasers = dataset.Tables[1];
-                DataTable Deposits = dataset.Tables[2];
-                DataTable Products = dataset.Tables[3];
-                if (table.Rows.Count == 1)
-                    return await GetContractFromDataAsync(table.Rows[0], Purchasers, Deposits, Products, con);
-                else
-                    return new Contract();
             }
+            return GetContractFromData(dataset);
         }
 
         public async Task<List<ContractSmall>> GetContractListAsync(string CRMId)
@@ -308,5 +410,56 @@ join Person prs on prs.personid = pu.personid and isnull(prs.CRMContactID,'') = 
             }
             return contracts;
         }
+
+        public async Task<int> GetPersonIdAsync(string CRMId)
+        {
+            string sql = "Select personid FROM Person Where isnull(CRMContactID,'') = @CRMID";
+
+            using (SqlConnection con = new SqlConnection(ConnectionString))
+            {
+                con.Open();
+                using (SqlCommand cmd = new SqlCommand(sql, con))
+                {
+                    cmd.CommandType = CommandType.Text;
+                    cmd.Parameters.AddWithValue("@CRMID", CRMId);
+                    var theId = await cmd.ExecuteScalarAsync();
+                    if (int.TryParse(Convert.ToString(theId), out int personId))
+                        return personId;
+                }
+            }
+            return 0;
+        }
+
+        public async Task<string> GetFileHashAsync(int id)
+        {
+            string sql = "Select filehash FROM DE_PersistedDocument Where PersistedDocumentId = @id";
+
+            using (SqlConnection con = new SqlConnection(ConnectionString))
+            {
+                con.Open();
+                using (SqlCommand cmd = new SqlCommand(sql, con))
+                {
+                    cmd.CommandType = CommandType.Text;
+                    cmd.Parameters.AddWithValue("@id", id);
+                    return Convert.ToString(await cmd.ExecuteScalarAsync());
+                }
+            }
+        }
+        public async Task<string> GetEmailBodyAsync(int id)
+        {
+            string sql = "Select message FROM DC_Sendgrid Where SendGridID = @id";
+
+            using (SqlConnection con = new SqlConnection(ConnectionString))
+            {
+                con.Open();
+                using (SqlCommand cmd = new SqlCommand(sql, con))
+                {
+                    cmd.CommandType = CommandType.Text;
+                    cmd.Parameters.AddWithValue("@id", id);
+                    return Convert.ToString(await cmd.ExecuteScalarAsync());
+                }
+            }
+        }
+
     }
 }

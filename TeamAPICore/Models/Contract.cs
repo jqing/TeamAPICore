@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,6 +9,8 @@ namespace TeamAPICore.Models
     public class Contract
     {
         public int Id { get; set; }
+        [JsonIgnore]
+        public int Personid { get; set; }
         public string Suite { get; set; }
         public string Project { get; set; }
         public string ProjectId { get; set; }
@@ -23,17 +26,22 @@ namespace TeamAPICore.Models
         public List<string> ParkingSpace { get; set; }
         public List<string> Locker { get; set; }
         public double OfferPrice { get; set; }
-        public DateTime ConstructionStartDate { get; set; }
-        public DateTime FinalClosedDate { get; set; }
-        public DateTime PossessionDate { get; set; }
-        public DateTime RegistrationDate { get; set; }
+        public DateTime? ConstructionStartDate { get; set; }
+        public DateTime? FinalClosedDate { get; set; }
+        public DateTime? PossessionDate { get; set; }
+        public DateTime? RegistrationDate { get; set; }
         public ServiceAddress ServiceAddress { get; set; }
         public List<Purchaser> Purchasers { get; set; }
         public Solicitor Solicitor { get; set; }
         public OccupancyFee OccupancyFees { get; set; }
         public List<Deposit> Deposits { get; set; }
         public string FloorPlan { get; set; }
-        public string APS { get; set; }
+        public List<PersistedDocument> APS { get; set; }
+        public List<PersistedDocument> Documents { get; set; }
+        public List<PersistedDocument> Correspondences { get; set; }
+        public List<DigitalCommunication> Communications { get; set; }
+        public List<Deficiency> Deficiencies { get; set; }
+        public RoadMap RoadMap { get; set; }
 
     }
 }

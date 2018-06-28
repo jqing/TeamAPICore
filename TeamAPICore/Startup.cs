@@ -16,11 +16,13 @@ namespace TeamAPICore
 {
     public class Startup
     {
-        public Startup(IConfiguration configuration)
+        public Startup(IHostingEnvironment env, IConfiguration config)
         {
-            Configuration = configuration;
+            HostingEnvironment = env;
+            Configuration = config;
         }
 
+        public IHostingEnvironment HostingEnvironment { get; }
         public IConfiguration Configuration { get; }
 
         // This method gets called by the runtime. Use this method to add services to the container.
@@ -89,7 +91,7 @@ namespace TeamAPICore
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
-            if (env.IsDevelopment())
+            if (env.IsDevelopment() || env.EnvironmentName == "Debug")
             {
                 app.UseDeveloperExceptionPage();
                 app.UseBrowserLink();
